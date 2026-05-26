@@ -118,7 +118,7 @@ class Assigner:
         if player_id in self.team2_ids:
             return 2
 
-        return 1
+        
 
     # -----------------------------
     # FEATURE EXTRACTION
