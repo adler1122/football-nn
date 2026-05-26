@@ -6,7 +6,7 @@ class Assigner:
 
     def __init__(self):
 
-        # team clustering model
+       
         self.model = KMeans(
             n_clusters=2,
             n_init=20,
@@ -15,19 +15,16 @@ class Assigner:
 
         self.fitted = False
 
-        # ID system
+        
         self.next_id = 0
 
-        # ID → feature (fixed)
+        
         self.memory = {}
 
-        # 🔥 FINAL FIX: HARD TEAM LISTS
         self.team1_ids = set()
         self.team2_ids = set()
 
-    # -----------------------------
-    # INITIAL TEAM CLUSTERING
-    # -----------------------------
+    
     def init_teams(self, frame, players):
 
         features = []
@@ -48,7 +45,7 @@ class Assigner:
         labels = self.model.fit_predict(features)
         self.fitted = True
 
-        # 🔥 LOCK TEAM ASSIGNMENT
+        
         for pid, label in zip(range(len(labels)), labels):
 
             if label == 0:
@@ -56,9 +53,7 @@ class Assigner:
             else:
                 self.team2_ids.add(pid)
 
-    # -----------------------------
-    # GET OR CREATE ID
-    # -----------------------------
+    
     def get_or_create_id(self, frame, bbox):
 
         feature = self.__get_feature(frame, bbox)
@@ -84,14 +79,12 @@ class Assigner:
 
             self.memory[best_id] = feature
 
-            # 🔥 NEW PLAYER → MUST CLASSIFY ONCE
+            
             self.__assign_new_player(best_id)
 
         return best_id
 
-    # -----------------------------
-    # NEW PLAYER CLASSIFICATION (ONLY ONCE)
-    # -----------------------------
+    
     def __assign_new_player(self, pid):
 
         feature = self.memory[pid]
@@ -107,9 +100,7 @@ class Assigner:
         else:
             self.team2_ids.add(pid)
 
-    # -----------------------------
-    # GET TEAM (PURE LOOKUP NOW)
-    # -----------------------------
+    
     def get_team(self, player_id):
 
         if player_id in self.team1_ids:
@@ -119,10 +110,6 @@ class Assigner:
             return 2
 
         
-
-    # -----------------------------
-    # FEATURE EXTRACTION
-    # -----------------------------
     def __get_feature(self, frame, bbox):
 
         x1, y1, x2, y2 = map(int, bbox)

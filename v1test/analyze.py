@@ -18,14 +18,10 @@ def run_analyzer(args, config: Config):
 
     assigner = Assigner()
 
-    # -----------------------------
-    # INIT FIRST FRAME ONLY
-    # -----------------------------
+   
     assigner.init_teams(video_frames[0], tracks["players"][0])
 
-    # -----------------------------
-    # PROCESS VIDEO
-    # -----------------------------
+    
     for frame_num, player_track in enumerate(tracks["players"]):
 
         frame = video_frames[frame_num]
@@ -46,9 +42,7 @@ def run_analyzer(args, config: Config):
             track["team"] = team
             track["team_color"] = config.colors[team]
 
-        # -------------------------
-        # GOALKEEPERS
-        # -------------------------
+        
         if "goalkeepers" in tracks and frame_num < len(tracks["goalkeepers"]):
 
             for _, gk in tracks["goalkeepers"][frame_num].items():
@@ -67,9 +61,6 @@ def run_analyzer(args, config: Config):
                 gk["team"] = team
                 gk["team_color"] = config.colors[team]
 
-    # -----------------------------
-    # OUTPUT
-    # -----------------------------
     output_frames = tracker.draw_annotations(video_frames, tracks)
 
     utils.save_video(output_frames, config.output_video_path)
