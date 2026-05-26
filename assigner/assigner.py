@@ -6,97 +6,147 @@ class Assigner:
 
     def __init__(self):
 
+        # team clustering model
         self.model = KMeans(
             n_clusters=2,
-            init="k-means++",
             n_init=20,
             random_state=42
         )
 
-        self.is_fitted = False
-        self.teams = {}
+        self.fitted = False
+
+        # ID system
+        self.next_id = 0
+
+        # ID → feature (fixed)
+        self.memory = {}
+
+        # 🔥 FINAL FIX: HARD TEAM LISTS
+        self.team1_ids = set()
+        self.team2_ids = set()
 
     # -----------------------------
-    # TRAIN GLOBAL MODEL (FIXED)
+    # INITIAL TEAM CLUSTERING
     # -----------------------------
-    def assign_team(self, frames, tracks):
+    def init_teams(self, frame, players):
 
-        samples = []
+        features = []
+        ids = []
 
-        # collect from multiple frames (important fix)
-        for frame_num in range(min(50, len(frames))):
+        for pid, p in players.items():
 
-            frame_players = tracks["players"][frame_num]
+            f = self.__get_feature(frame, p["bounding_box"])
 
-            for _, player in frame_players.items():
+            if self.__valid(f):
+                features.append(f)
+                ids.append(self.next_id)
+                self.memory[self.next_id] = f
+                self.next_id += 1
 
-                color = self.__get_color(frames[frame_num], player["bounding_box"])
+        features = np.array(features)
 
-                if self.__valid(color):
-                    samples.append(color)
+        labels = self.model.fit_predict(features)
+        self.fitted = True
 
-        samples = np.array(samples)
+        # 🔥 LOCK TEAM ASSIGNMENT
+        for pid, label in zip(range(len(labels)), labels):
 
-        if len(samples) < 2:
-            raise ValueError("Not enough valid samples for KMeans")
-
-        self.model.fit(samples)
-        self.is_fitted = True
+            if label == 0:
+                self.team1_ids.add(pid)
+            else:
+                self.team2_ids.add(pid)
 
     # -----------------------------
-    # PREDICT TEAM
+    # GET OR CREATE ID
     # -----------------------------
-    def get_player_team(self, frame, bbox, player_id):
+    def get_or_create_id(self, frame, bbox):
 
-        if not self.is_fitted:
+        feature = self.__get_feature(frame, bbox)
+
+        if not self.__valid(feature):
+            return None
+
+        best_id = None
+        best_dist = float("inf")
+
+        for pid, stored in self.memory.items():
+
+            dist = np.linalg.norm(feature - stored)
+
+            if dist < 30 and dist < best_dist:
+                best_dist = dist
+                best_id = pid
+
+        if best_id is None:
+
+            best_id = self.next_id
+            self.next_id += 1
+
+            self.memory[best_id] = feature
+
+            # 🔥 NEW PLAYER → MUST CLASSIFY ONCE
+            self.__assign_new_player(best_id)
+
+        return best_id
+
+    # -----------------------------
+    # NEW PLAYER CLASSIFICATION (ONLY ONCE)
+    # -----------------------------
+    def __assign_new_player(self, pid):
+
+        feature = self.memory[pid]
+
+        if not self.fitted:
+            self.team1_ids.add(pid)
+            return
+
+        label = int(self.model.predict([feature])[0])
+
+        if label == 0:
+            self.team1_ids.add(pid)
+        else:
+            self.team2_ids.add(pid)
+
+    # -----------------------------
+    # GET TEAM (PURE LOOKUP NOW)
+    # -----------------------------
+    def get_team(self, player_id):
+
+        if player_id in self.team1_ids:
             return 1
 
-        if player_id in self.teams:
-            return self.teams[player_id]
+        if player_id in self.team2_ids:
+            return 2
 
-        color = self.__get_color(frame, bbox)
-
-        if not self.__valid(color):
-            team = 1
-        else:
-            team = int(self.model.predict([color])[0]) + 1
-
-        self.teams[player_id] = team
-        return team
+        return 1
 
     # -----------------------------
-    # CLEAN JERSEY COLOR EXTRACTION (CRITICAL FIX)
+    # FEATURE EXTRACTION
     # -----------------------------
-    def __get_color(self, frame, bbox):
+    def __get_feature(self, frame, bbox):
 
         x1, y1, x2, y2 = map(int, bbox)
         crop = frame[y1:y2, x1:x2]
 
         if crop.size == 0:
-            return np.array([0, 0, 0])
+            return np.zeros(3)
 
         h, w = crop.shape[:2]
 
-        # strict upper torso region (fixes most of your errors)
         region = crop[
-            int(h * 0.15): int(h * 0.55),
+            int(h * 0.2): int(h * 0.55),
             int(w * 0.25): int(w * 0.75)
         ]
 
-        if region.size == 0:
-            return np.array([0, 0, 0])
-
         pixels = region.reshape(-1, 3)
 
-        # remove grass + noise
         mean = pixels.mean(axis=1)
-        mask = (mean > 40) & (mean < 220)
-        pixels = pixels[mask]
+        pixels = pixels[(mean > 40) & (mean < 220)]
 
-        if len(pixels) == 0:
-            return np.array([0, 0, 0])
+        if len(pixels) < 10:
+            return np.zeros(3)
 
-        return np.median(pixels, axis=0)
+        return np.mean(pixels, axis=0)
 
-    def __valid(self, color):
-        return not np.all(color == 0)
+    def __valid(self, f):
+        return np.linalg.norm(f) > 10

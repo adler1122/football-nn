@@ -19,25 +19,30 @@ def run_analyzer(args, config: Config):
     assigner = Assigner()
 
     # -----------------------------
-    # TRAIN ONCE (FIXED PROPERLY)
+    # INIT FIRST FRAME ONLY
     # -----------------------------
-    assigner.assign_team(video_frames, tracks)
+    assigner.init_teams(video_frames[0], tracks["players"][0])
 
     # -----------------------------
-    # ASSIGN TEAMS
+    # PROCESS VIDEO
     # -----------------------------
     for frame_num, player_track in enumerate(tracks["players"]):
 
         frame = video_frames[frame_num]
 
-        for player_id, track in player_track.items():
+        for _, track in player_track.items():
 
-            team = assigner.get_player_team(
+            pid = assigner.get_or_create_id(
                 frame,
-                track["bounding_box"],
-                player_id
+                track["bounding_box"]
             )
 
+            if pid is None:
+                continue
+
+            team = assigner.get_team(pid)
+
+            track["global_id"] = pid
             track["team"] = team
             track["team_color"] = config.colors[team]
 
@@ -46,31 +51,21 @@ def run_analyzer(args, config: Config):
         # -------------------------
         if "goalkeepers" in tracks and frame_num < len(tracks["goalkeepers"]):
 
-            gk_track = tracks["goalkeepers"][frame_num]
+            for _, gk in tracks["goalkeepers"][frame_num].items():
 
-            for gk_id, gk in gk_track.items():
+                pid = assigner.get_or_create_id(
+                    frame,
+                    gk["bounding_box"]
+                )
 
-                gx = (gk["bounding_box"][0] + gk["bounding_box"][2]) / 2
-                gy = gk["bounding_box"][3]
+                if pid is None:
+                    continue
 
-                best_team = 1
-                best_dist = float("inf")
+                team = assigner.get_team(pid)
 
-                for pid, player in player_track.items():
-
-                    pb = player["bounding_box"]
-
-                    px = (pb[0] + pb[2]) / 2
-                    py = pb[3]
-
-                    dist = (gx - px) ** 2 + (gy - py) ** 2
-
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_team = player.get("team", 1)
-
-                gk["team"] = best_team
-                gk["team_color"] = config.colors[best_team]
+                gk["global_id"] = pid
+                gk["team"] = team
+                gk["team_color"] = config.colors[team]
 
     # -----------------------------
     # OUTPUT
