@@ -1,58 +1,102 @@
+import numpy as np
 from sklearn.cluster import KMeans
-from typing import List, Tuple
+
 
 class Assigner:
+
     def __init__(self):
-        self.first_team_color = []
-        self.second_team_color = []
+
+        self.model = KMeans(
+            n_clusters=2,
+            init="k-means++",
+            n_init=20,
+            random_state=42
+        )
+
+        self.is_fitted = False
         self.teams = {}
-        self.model = KMeans(n_clusters=2, init="k-means++", n_init=10)
 
-    def assign_team(self, frame, players):
-        colors = []
+    # -----------------------------
+    # TRAIN GLOBAL MODEL (FIXED)
+    # -----------------------------
+    def assign_team(self, frames, tracks):
 
-        for _ , player in players.items():
-            box = player["bounding_box"]
-            actual_color = self.__get_color(frame, box)
-            colors.append(actual_color)
+        samples = []
 
-        self.model = KMeans(n_clusters=2, init="k-means++", n_init=10)
-        self.model.fit(colors)
+        # collect from multiple frames (important fix)
+        for frame_num in range(min(50, len(frames))):
 
-        self.first_team_color = self.model.cluster_centers_[0]
-        self.second_team_color = self.model.cluster_centers_[1]
+            frame_players = tracks["players"][frame_num]
 
-    def get_player_team(self,frame,player_bbox,player_id):
+            for _, player in frame_players.items():
+
+                color = self.__get_color(frames[frame_num], player["bounding_box"])
+
+                if self.__valid(color):
+                    samples.append(color)
+
+        samples = np.array(samples)
+
+        if len(samples) < 2:
+            raise ValueError("Not enough valid samples for KMeans")
+
+        self.model.fit(samples)
+        self.is_fitted = True
+
+    # -----------------------------
+    # PREDICT TEAM
+    # -----------------------------
+    def get_player_team(self, frame, bbox, player_id):
+
+        if not self.is_fitted:
+            return 1
+
         if player_id in self.teams:
             return self.teams[player_id]
 
-        player_color = self.__get_color(frame,player_bbox)
+        color = self.__get_color(frame, bbox)
 
-        team_id = self.model.predict(player_color.reshape(1,-1))[0]
-        team_id+=1
+        if not self.__valid(color):
+            team = 1
+        else:
+            team = int(self.model.predict([color])[0]) + 1
 
-        if player_id == 101:
-            team_id=1
+        self.teams[player_id] = team
+        return team
 
-        self.teams[player_id] = team_id
-
-        return team_id
-
+    # -----------------------------
+    # CLEAN JERSEY COLOR EXTRACTION (CRITICAL FIX)
+    # -----------------------------
     def __get_color(self, frame, bbox):
-        x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+
+        x1, y1, x2, y2 = map(int, bbox)
         crop = frame[y1:y2, x1:x2]
 
-        h = crop.shape[0]
-        mid_third = crop[h // 3 : 2 * h // 3, :]
+        if crop.size == 0:
+            return np.array([0, 0, 0])
 
-        image_reshaped = mid_third.reshape(-1, 3)
+        h, w = crop.shape[:2]
 
-        model = KMeans(n_clusters = 2, init="k-means++", n_init=1)
-        model.fit(image_reshaped)
-        labels = model.labels_.reshape(mid_third.shape[0], mid_third.shape[1])
+        # strict upper torso region (fixes most of your errors)
+        region = crop[
+            int(h * 0.15): int(h * 0.55),
+            int(w * 0.25): int(w * 0.75)
+        ]
 
-        corner_labels = [labels[0, 0], labels[0, -1], labels[-1, 0], labels[-1, -1]]
-        bg_cluster = max(set(corner_labels), key=corner_labels.count)
-        shirt_cluster = 1 - bg_cluster
+        if region.size == 0:
+            return np.array([0, 0, 0])
 
-        return model.cluster_centers_[shirt_cluster]
+        pixels = region.reshape(-1, 3)
+
+        # remove grass + noise
+        mean = pixels.mean(axis=1)
+        mask = (mean > 40) & (mean < 220)
+        pixels = pixels[mask]
+
+        if len(pixels) == 0:
+            return np.array([0, 0, 0])
+
+        return np.median(pixels, axis=0)
+
+    def __valid(self, color):
+        return not np.all(color == 0)

@@ -8,7 +8,7 @@ Usage:
 
 import argparse
 import sys
-import cmd
+import v1test
 from config import Config
 
 
@@ -39,9 +39,9 @@ def main():
 
     match args.command:
         case "train":
-            cmd.train_model(remaining, config)
+            v1test.train_model(remaining, config)
         case "analyze":
-            cmd.run_analyzer(remaining, config)
+            v1test.run_analyzer(remaining, config)
         case _:
             print(f"Unknown command: {args.command}")
             parser.print_help()
