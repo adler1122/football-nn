@@ -3,6 +3,9 @@ import supervision as sv
 import numpy as np
 import cv2
 from typing import List, Dict, Any
+from .homography import HomographyMapper
+from .pitch import PitchDrawer
+
 
 class Tracker:
     """
@@ -12,6 +15,8 @@ class Tracker:
         self.model = YOLO(model_path)
         self.model.to(device)
         self.tracker: sv.ByteTrack = sv.ByteTrack()
+        self.mapper = HomographyMapper()
+        self.pitch_drawer = PitchDrawer()
 
     def __detect(self, frames: List[np.ndarray], conf: float,batch_size: int = 16) -> List[Any]:
         """
@@ -149,6 +154,47 @@ class Tracker:
         cv2.drawContours(frame, [triangle_points],0,(0,0,0), 2)
 
         return frame
+    
+    def draw_birds_eye_view(self,frame, player_dict):
+
+        pitch = self.pitch_drawer.create_pitch()
+
+        for track_id, player in player_dict.items():
+
+            foot = get_foot_position(player["bounding_box"])
+
+            try:
+                x, y = self.mapper.transform(foot)
+            except:
+                continue
+
+            color = player.get("team_color",(0, 0, 255))
+
+            x = max(0, min(1049, x))
+            y = max(0, min(679, y))
+
+            cv2.circle(pitch, (x, y), 8, color, -1)
+
+            cv2.putText(pitch, str(track_id), (x + 5, y),
+                cv2.FONT_HERSHEY_SIMPLEX,0.4,(255, 255, 255),1)
+
+        mini_pitch = cv2.resize(pitch,(350, 220))
+
+        h, w = mini_pitch.shape[:2]
+
+        overlay = frame.copy()
+
+        x = frame.shape[1] - w - 20
+        y = frame.shape[0] - h - 20
+
+        overlay[y:y+h, x:x+w] = mini_pitch
+
+        alpha = 0.65
+
+        frame = cv2.addWeighted(overlay,alpha,frame,1 - alpha,0)
+
+        return frame
+    
 
     def draw_annotations(self,video_frames, tracks):
         output_video_frames= []
@@ -174,6 +220,9 @@ class Tracker:
             # Draw ball 
             for track_id, ball in ball_dict.items():
                 frame = self.draw_traingle(frame, ball["bounding_box"],(0,255,0))
+
+
+            frame = self.draw_birds_eye_view(frame,player_dict)    
 
             output_video_frames.append(frame)
 

@@ -46,7 +46,7 @@ class Assigner:
         self.fitted = True
 
         
-        for pid, label in zip(range(len(labels)), labels):
+        for pid, label in zip(ids, labels):
 
             if label == 0:
                 self.team1_ids.add(pid)
