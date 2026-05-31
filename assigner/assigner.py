@@ -54,37 +54,27 @@ class Assigner:
                 self.team2_ids.add(pid)
 
     
-    def get_or_create_id(self, frame, bbox):
+    def get_or_create_id(self, frame, bbox, track_id):
 
         feature = self.__get_feature(frame, bbox)
 
         if not self.__valid(feature):
             return None
 
-        best_id = None
-        best_dist = float("inf")
+        if track_id not in self.memory:
 
-        for pid, stored in self.memory.items():
+            self.memory[track_id] = feature
 
-            dist = np.linalg.norm(feature - stored)
+            self.__assign_new_player(track_id)
 
-            if dist < 30 and dist < best_dist:
-                best_dist = dist
-                best_id = pid
+        else:
 
-        if best_id is None:
+            self.memory[track_id] = (
+                0.9 * self.memory[track_id]
+                + 0.1 * feature
+            )
 
-            best_id = self.next_id
-            self.next_id += 1
-
-            self.memory[best_id] = feature
-
-            
-            self.__assign_new_player(best_id)
-
-        return best_id
-
-    
+        return track_id
     def __assign_new_player(self, pid):
 
         feature = self.memory[pid]

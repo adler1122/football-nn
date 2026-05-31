@@ -155,47 +155,122 @@ class Tracker:
 
         return frame
     
-    def draw_birds_eye_view(self,frame, player_dict):
+    def draw_birds_eye_view(
+        self,
+        frame,
+        player_dict,
+        ball_dict
+    ):
 
         pitch = self.pitch_drawer.create_pitch()
 
         for track_id, player in player_dict.items():
 
-            foot = get_foot_position(player["bounding_box"])
+            foot = get_foot_position(
+                player["bounding_box"]
+            )
 
             try:
                 x, y = self.mapper.transform(foot)
             except:
                 continue
 
-            color = player.get("team_color",(0, 0, 255))
-
             x = max(0, min(1049, x))
             y = max(0, min(679, y))
 
-            cv2.circle(pitch, (x, y), 8, color, -1)
+            color = player.get(
+                "team_color",
+                (0, 0, 255)
+            )
 
-            cv2.putText(pitch, str(track_id), (x + 5, y),
-                cv2.FONT_HERSHEY_SIMPLEX,0.4,(255, 255, 255),1)
+            # filled player circle
+            cv2.circle(
+                pitch,
+                (x, y),
+                12,
+                color,
+                -1
+            )
 
-        mini_pitch = cv2.resize(pitch,(350, 220))
+            # white outline
+            cv2.circle(
+                pitch,
+                (x, y),
+                12,
+                (255, 255, 255),
+                2
+            )
+
+        # draw ball
+        for _, ball in ball_dict.items():
+
+            try:
+                center = get_center_of_bbox(
+                    ball["bounding_box"]
+                )
+
+                bx, by = self.mapper.transform(center)
+
+                bx = max(0, min(1049, bx))
+                by = max(0, min(679, by))
+
+                cv2.circle(
+                    pitch,
+                    (bx, by),
+                    8,
+                    (0, 255, 255),
+                    -1
+                )
+
+                cv2.circle(
+                    pitch,
+                    (bx, by),
+                    8,
+                    (255, 255, 255),
+                    2
+                )
+
+            except:
+                pass
+
+        # larger minimap
+        mini_pitch = cv2.resize(
+            pitch,
+            (600, 380)
+        )
 
         h, w = mini_pitch.shape[:2]
 
-        overlay = frame.copy()
+        # border
+        cv2.rectangle(
+            mini_pitch,
+            (0, 0),
+            (w - 1, h - 1),
+            (0, 0, 0),
+            4
+        )
 
         x = frame.shape[1] - w - 20
         y = frame.shape[0] - h - 20
 
-        overlay[y:y+h, x:x+w] = mini_pitch
+        overlay = frame.copy()
 
-        alpha = 0.65
+        overlay[
+            y:y+h,
+            x:x+w
+        ] = mini_pitch
 
-        frame = cv2.addWeighted(overlay,alpha,frame,1 - alpha,0)
+        # transparency
+        frame = cv2.addWeighted(
+            overlay,
+            0.65,
+            frame,
+            0.35,
+            0
+        )
 
         return frame
     
-
     def draw_annotations(self,video_frames, tracks):
         output_video_frames= []
         for frame_num, frame in enumerate(video_frames):
@@ -222,7 +297,7 @@ class Tracker:
                 frame = self.draw_traingle(frame, ball["bounding_box"],(0,255,0))
 
 
-            frame = self.draw_birds_eye_view(frame,player_dict)    
+            frame = self.draw_birds_eye_view(frame,player_dict,ball_dict)    
 
             output_video_frames.append(frame)
 

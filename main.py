@@ -26,10 +26,14 @@ def main():
     )
 
     subparsers.add_parser(
-        "train",
+        "train_field",
         help="Train a model"
     )
 
+    subparsers.add_parser(
+        "train_player",
+        help="Train a model"
+    )
     subparsers.add_parser(
         "analyze",
         help="Analyze a video"
@@ -38,8 +42,10 @@ def main():
     args, remaining = parser.parse_known_args()
 
     match args.command:
-        case "train":
-            v1test.train_model(remaining, config)
+        case "train_player":
+            v1test.train_model_player(remaining, config)
+        case "train_field":
+            v1test.train_model_field(remaining, config)
         case "analyze":
             v1test.run_analyzer(remaining, config)
         case _:

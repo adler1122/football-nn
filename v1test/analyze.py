@@ -26,11 +26,12 @@ def run_analyzer(args, config: Config):
 
         frame = video_frames[frame_num]
 
-        for _, track in player_track.items():
+        for track_id , track in player_track.items():
 
             pid = assigner.get_or_create_id(
                 frame,
-                track["bounding_box"]
+                track["bounding_box"],
+                track_id
             )
 
             if pid is None:
