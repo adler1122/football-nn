@@ -2,8 +2,9 @@
 """
 Main entry point for the ML pipeline.
 Usage:
-    python main.py train --data custom_data.csv
-    python main.py predict --model my_model.pt
+    python main.py train_field --data datasets/field/data.yaml --epochs 100
+    python main.py train_player --data datasets/player/data.yaml --epochs 100
+    python main.py analyze
 """
 
 import argparse
