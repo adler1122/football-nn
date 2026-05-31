@@ -5,3 +5,6 @@ runs
 data
 *.zip
 *.pdf
+*.png
+*.jpg
+*.jpeg
