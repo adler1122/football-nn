@@ -38,3 +38,4 @@ class Config:
         """
 
         player_model_path = 'models/player_best.pt'
+        field_model_path = 'models/field_best.pt'
