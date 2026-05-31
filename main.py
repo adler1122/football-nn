@@ -44,9 +44,9 @@ def main():
 
     match args.command:
         case "train_player":
-            v1test.train_model_player(remaining, config)
+            v1test.train_player_model(remaining, config)
         case "train_field":
-            v1test.train_model_field(remaining, config)
+            v1test.train_field_model(remaining, config)
         case "analyze":
             v1test.run_analyzer(remaining, config)
         case _:
