@@ -1,14 +1,17 @@
 from config import Config
 import utils
 
-from tracking import Tracker
+from tracking import Tracker , FieldDetector
 from assigner import Assigner
 
 
 def run_analyzer(args, config: Config):
 
     video_frames = utils.read_video(config.input_video_path)
-
+    field_detector = FieldDetector(
+    config.Analyzer.field_model_path,
+    config.device
+    )
     tracker = Tracker(
         config.Analyzer.player_model_path,
         config.device
