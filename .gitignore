@@ -11,4 +11,6 @@ data
 *.mp4
 *.avi
 *.mkv
-datasets/
+images/
+labels/
+models/

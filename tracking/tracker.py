@@ -36,7 +36,7 @@ class Tracker:
         self, frames: List[np.ndarray]
     ) -> Dict[str, List[Dict[int, Dict[str, Any]]]]:
 
-        raw_detections = self.__detect(frames, conf=0.1, batch_size=20)
+        raw_detections = self.__detect(frames, conf=0.3, batch_size=20)
 
         objects: Dict[str, list] = {
             "ball":        [],
@@ -176,7 +176,7 @@ class Tracker:
     
         for track_id, player in player_dict.items():
             foot = get_foot_position(player["bounding_box"])
-            mapped = self.mapper.transform(foot)   # ← no H arg (fix #1)
+            mapped = self.mapper.transform(foot)   
             if mapped is None:
                 continue
 
