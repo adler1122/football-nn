@@ -79,7 +79,7 @@ def train_player_model(args, config: Config):
     logger.info("Dataset: %s", args.data)
 
     
-    model = YOLO("yolo11n.pt")
+    model = YOLO("yolov8s.pt")
 
     results = model.train(
         data=args.data,

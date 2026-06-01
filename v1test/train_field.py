@@ -79,7 +79,7 @@ def train_field_model(args, config: Config):
 
     logger.info("Starting field model training")
     logger.info("Dataset: %s", args.data)
-    model = YOLO("yolo11n-pose.pt")
+    model = YOLO("yolov8s-pose.pt")
 
     results = model.train(
         data=args.data,

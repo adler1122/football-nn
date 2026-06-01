@@ -4,69 +4,115 @@ import numpy as np
 
 class PitchDrawer:
 
-    def __init__(self):
 
-        self.width = 1050
-        self.height = 680
+    WIDTH  = 1050
+    HEIGHT = 680
+    _L_PEN_X  = 165
+    _L_GA_X   = 220   
+    _PEN_Y1   = 138   
+    _PEN_Y2   = 541   
+    _GA_Y1    = 248   
+    _GA_Y2    = 431   
+    _L_SPOT_X = 110   
+    _R_SPOT_X = 940   
 
-    def create_pitch(self):
+    WHITE = (255, 255, 255)
+    LINE_W = 2
 
-        pitch = np.zeros(
-            (self.height, self.width, 3),
-            dtype=np.uint8
-        )
+    def __init__(self) -> None:
+        self.width  = self.WIDTH
+        self.height = self.HEIGHT
 
-        # grass stripes
-        for i in range(0, self.width, 80):
+    def create_pitch(self) -> np.ndarray:
+        """Return a freshly drawn 1050 × 680 BGR pitch image."""
 
-            color = (
-                (40, 140, 40)
-                if (i // 80) % 2 == 0
-                else (30, 120, 30)
-            )
+        pitch = np.zeros((self.HEIGHT, self.WIDTH, 3), dtype=np.uint8)
 
-            cv2.rectangle(
-                pitch,
-                (i, 0),
-                (i + 80, self.height),
-                color,
-                -1
-            )
+        
+        for i in range(0, self.WIDTH, 80):
+            color = (40, 140, 40) if (i // 80) % 2 == 0 else (30, 120, 30)
+            cv2.rectangle(pitch, (i, 0), (i + 80, self.HEIGHT), color, -1)
 
-        # outer boundary
+        W = self.WHITE
+        LW = self.LINE_W
+
+        
+        cv2.rectangle(pitch, (0, 0), (self.WIDTH - 1, self.HEIGHT - 1), W, LW + 1)
+
+        
+        mid_x = self.WIDTH // 2
+        cv2.line(pitch, (mid_x, 0), (mid_x, self.HEIGHT), W, LW)
+
+        
+        centre = (mid_x, self.HEIGHT // 2)
+        cv2.circle(pitch, centre, 92, W, LW)
+        cv2.circle(pitch, centre, 4,  W, -1)
+
+        
         cv2.rectangle(
             pitch,
-            (0, 0),
-            (self.width - 1, self.height - 1),
-            (255, 255, 255),
-            3
+            (0,              self._PEN_Y1),
+            (self._L_PEN_X,  self._PEN_Y2),
+            W, LW,
         )
 
-        # halfway line
-        cv2.line(
+        
+        cv2.rectangle(
             pitch,
-            (self.width // 2, 0),
-            (self.width // 2, self.height),
-            (255, 255, 255),
-            2
+            (0,             self._GA_Y1),
+            (self._L_GA_X,  self._GA_Y2),
+            W, LW,
         )
 
-        # center circle
-        cv2.circle(
+        
+        cv2.circle(pitch, (self._L_SPOT_X, self.HEIGHT // 2), 4, W, -1)
+
+       
+        cv2.ellipse(
             pitch,
-            (self.width // 2, self.height // 2),
-            80,
-            (255, 255, 255),
-            2
+            (self._L_SPOT_X, self.HEIGHT // 2),
+            (92, 92),
+            0,
+            -53, 53,   
+            W, LW,
         )
 
-        # center spot
-        cv2.circle(
+        
+        cv2.rectangle(
             pitch,
-            (self.width // 2, self.height // 2),
-            4,
-            (255, 255, 255),
-            -1
+            (self.WIDTH - self._L_PEN_X, self._PEN_Y1),
+            (self.WIDTH,                  self._PEN_Y2),
+            W, LW,
         )
+
+        
+        cv2.rectangle(
+            pitch,
+            (self.WIDTH - self._L_GA_X, self._GA_Y1),
+            (self.WIDTH,                 self._GA_Y2),
+            W, LW,
+        )
+
+        
+        cv2.circle(pitch, (self._R_SPOT_X, self.HEIGHT // 2), 4, W, -1)
+
+        
+        cv2.ellipse(
+            pitch,
+            (self._R_SPOT_X, self.HEIGHT // 2),
+            (92, 92),
+            0,
+            127, 233,
+            W, LW,
+        )
+
+        
+        goal_h = 73   
+        goal_y1 = (self.HEIGHT - goal_h) // 2
+        goal_y2 = goal_y1 + goal_h
+        goal_d  = 20   
+
+        cv2.rectangle(pitch, (0,                    goal_y1), (goal_d, goal_y2), W, LW)
+        cv2.rectangle(pitch, (self.WIDTH - goal_d,  goal_y1), (self.WIDTH, goal_y2), W, LW)
 
         return pitch
