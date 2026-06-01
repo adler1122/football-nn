@@ -21,14 +21,18 @@ class Config:
     )
 
     class Train:
-        """
-        Docstring for Train
-        """
         batch_size: int = 8
-        yolo_base_model = 'yolov8s.pt'
-        train_data_path = './data/football-players-detection'
+
+        player_base_model = "yolov8s.pt"
+        field_base_model = "yolov8s-pose.pt"
+
+        player_data_path = "./data/football-players-detection"
+        field_data_path = "./data/football-field-detection"
+
         imgsz = 640
+
         conf: float = 0.1
+
         cache_dir: str = "cache"
         use_cache: bool = True
 

@@ -6,26 +6,41 @@ class HomographyMapper:
 
     def __init__(self):
 
-        self.image_points = np.float32([
-            [120, 110],
-            [1180, 110],
-            [1260, 650],
-            [50, 650]
-        ])
+        self.pitch_points = np.array([
+            [0,0],
+            [1050,0],
+            [1050,680],
+            [0,680]
+        ], dtype=np.float32)
 
-        self.pitch_points = np.float32([
-            [0, 0],
-            [1050, 0],
-            [1050, 680],
-            [0, 680]
-        ])
+    def compute(self, image_keypoints):
 
-        self.H = cv2.getPerspectiveTransform(
-            self.image_points,
-            self.pitch_points
+        if image_keypoints is None:
+            return None
+
+        image_keypoints = np.asarray(
+            image_keypoints,
+            dtype=np.float32
         )
 
-    def transform(self, point):
+        if len(image_keypoints) < 4:
+            return None
+
+        src = image_keypoints[:4]
+
+        dst = self.pitch_points
+
+        H, _ = cv2.findHomography(
+            src,
+            dst
+        )
+
+        return H
+
+    def transform(self, point, H):
+
+        if H is None:
+            return None
 
         p = np.array(
             [[[point[0], point[1]]]],
@@ -34,7 +49,7 @@ class HomographyMapper:
 
         mapped = cv2.perspectiveTransform(
             p,
-            self.H
+            H
         )
 
         return (

@@ -54,9 +54,9 @@ class Assigner:
                 self.team2_ids.add(pid)
 
     
-    def get_or_create_id(self, frame, bbox, track_id):
+    def get_or_create_id(self,frame,bbox,track_id):
 
-        feature = self.__get_feature(frame, bbox)
+        feature = self.__get_feature(frame,bbox)
 
         if not self.__valid(feature):
             return None
@@ -69,10 +69,9 @@ class Assigner:
 
         else:
 
-            self.memory[track_id] = (
-                0.9 * self.memory[track_id]
-                + 0.1 * feature
-            )
+            self.memory[track_id] = (0.9 * self.memory[track_id]+ 0.1 * feature)
+
+        return track_id
 
         return track_id
     def __assign_new_player(self, pid):
