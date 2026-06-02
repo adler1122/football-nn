@@ -1,70 +1,72 @@
 from ultralytics import YOLO
 import numpy as np
 
+# Any keypoint below this confidence is treated as undetected
+_CONF_MIN = 0.5
+
 
 class FieldDetector:
     """
-    Detects pitch keypoints in a single camera frame using a YOLO
-    pose / keypoint model trained on football field lines.
-
-    Returns
-    -------
-    detect_keypoints() → (N, 2) float32 numpy array of (x, y) pixel
-    coordinates, or *None* when no keypoints are found.
+    Detects pitch keypoints in a camera frame using a YOLO pose model
+    trained on football field lines.
     """
 
     def __init__(self, model_path: str, device: str) -> None:
         self.model = YOLO(model_path)
         self.model.to(device)
 
-    def detect_keypoints(self, frame: np.ndarray) -> np.ndarray | None:
-
-        result = self.model.predict(
-            frame,
-            conf=0.25,
-            verbose=False,
-        )[0]
+    def detect_keypoints(self, frame: np.ndarray) -> "np.ndarray | None":
+        """
+        Returns (N, 2) float32 array of valid keypoint pixel coords, or None.
+        Only keypoints with confidence >= _CONF_MIN are returned.
+        """
+        result = self.model.predict(frame, conf=0.25, verbose=False)[0]
 
         if result.keypoints is None or len(result.keypoints.xy) == 0:
             return None
 
-        pts = result.keypoints.xy[0]
+        pts  = result.keypoints.xy[0].cpu().numpy()   # (32, 2)
+        conf = result.keypoints.conf
+        conf = conf[0].cpu().numpy() if conf is not None else np.zeros(len(pts))
 
-        if len(pts) == 0:
+        # Only keep high-confidence, non-zero points
+        valid = (conf >= _CONF_MIN) & ~((pts[:, 0] == 0) & (pts[:, 1] == 0))
+
+        if valid.sum() < 4:
             return None
 
-        keypoints = pts.cpu().numpy()  # (N, 2) float32
-
-
-        valid_mask = ~((keypoints[:, 0] == 0) & (keypoints[:, 1] == 0))
-        keypoints = keypoints[valid_mask]
-
-        if len(keypoints) < 4:
-            return None
-
-        return keypoints
+        # Return full 32-length arrays but zero out invalid ones
+        # (HomographyMapper uses index positions, so we must preserve indices)
+        filtered = pts.copy()
+        filtered[~valid] = 0
+        return filtered
 
     def detect_keypoints_with_confidence(
         self, frame: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray] | None:
-
-        result = self.model.predict(
-            frame,
-            conf=0.25,
-            verbose=False,
-        )[0]
+    ) -> "tuple[np.ndarray, np.ndarray] | None":
+        """
+        Returns (keypoints, confidences) preserving all 32 index positions.
+        Invalid keypoints have conf=0.0 and coords=(0,0).
+        Returns None if fewer than 4 keypoints pass the threshold.
+        """
+        result = self.model.predict(frame, conf=0.25, verbose=False)[0]
 
         if result.keypoints is None or len(result.keypoints.xy) == 0:
             return None
 
-        pts = result.keypoints.xy[0].cpu().numpy()      # (N, 2)
-        conf = result.keypoints.conf[0].cpu().numpy()   # (N,)
+        pts  = result.keypoints.xy[0].cpu().numpy()   # (32, 2)
+        conf = result.keypoints.conf
+        conf = conf[0].cpu().numpy() if conf is not None else np.zeros(len(pts))
 
-        valid_mask = (conf > 0.0) & ~((pts[:, 0] == 0) & (pts[:, 1] == 0))
-        pts = pts[valid_mask]
-        conf = conf[valid_mask]
+        # Zero out low-confidence points so HomographyMapper filters them
+        valid = (conf >= _CONF_MIN) & ~((pts[:, 0] == 0) & (pts[:, 1] == 0))
 
-        if len(pts) < 4:
+        if valid.sum() < 4:
             return None
 
-        return pts, conf
+        pts_out  = pts.copy()
+        conf_out = conf.copy()
+        pts_out[~valid]  = 0
+        conf_out[~valid] = 0.0
+
+        return pts_out, conf_out

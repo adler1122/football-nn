@@ -6,8 +6,8 @@ data
 *.zip
 *.pdf
 *.png
-*.jpg
 *.jpeg
+*.jpg
 *.mp4
 *.avi
 *.mkv

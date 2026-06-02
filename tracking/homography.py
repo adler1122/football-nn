@@ -2,94 +2,117 @@ import cv2
 import numpy as np
 
 
-
-''' 32-keypoint pitch coordinate map , might be wrong tho , check it '''
-
-# Derived by visually inspecting the keypoint debug image against the
-# actual pitch markings. Coordinates are in the canonical pitch canvas:
-#   width  = 1050 px  (~105 m, 1 m = 10 px)
-#   height =  680 px  (~ 68 m)
+# ---------------------------------------------------------------------------
+# 32-keypoint pitch coordinate map
+# ---------------------------------------------------------------------------
+# Pitch canvas: 1050 x 680 px  (1 m = 10 px, FIFA 105m x 68m)
 #
-# Left side  = x near 0
-# Right side = x near 1050
-# Top        = y near 0  (touchline visible at top of broadcast camera)
-# Bottom     = y near 680
+# Measurements used:
+#   Penalty area depth : 16.5m = 165px
+#   Goal area depth    :  5.5m =  55px
+#   Penalty area width : 40.3m = 403px  → y: 138 to 541  (centred on 340)
+#   Goal area width    : 18.3m = 183px  → y: 248 to 431  (centred on 340)
+#   Penalty spot       : 11.0m = 110px  from goal line
+#   Centre circle r    :  9.15m = 91px
+#   Penalty arc r      :  9.15m = 91px  from penalty spot
 #
-# Keypoints confirmed from debug image:
+# Index → pitch location (from manual paper labelling):
 #
-#  idx   visible location in image
+#  0  top-left corner
+#  1  top-left corner of left 18-box on touchline
+#  2  top-left corner of left 6-box on touchline
+#  3  bottom-left corner of left 6-box on touchline
+#  4  bottom-left corner of left 18-box on touchline
+#  5  bottom-left corner
+#  6  top-right corner of left 6-box (inside pitch)
+#  7  bottom-right corner of left 6-box (inside pitch)
+#  8  left penalty spot
+#  9  top-right corner of left 18-box (inside pitch)
+# 10  top of penalty arc next to left 18-box (bulges toward centre)
+# 11  bottom of penalty arc next to left 18-box
+# 12  bottom-right corner of left 18-box (inside pitch)
+# 13  top of halfway line (outside touchline)
+# 14  halfway line — top intersection with centre circle
+# 15  halfway line — bottom intersection with centre circle
+# 16  bottom of halfway line (outside touchline)
+# 17  top-left corner of right 18-box (inside pitch)
+# 18  top of penalty arc next to right 18-box
+# 19  bottom of penalty arc next to right 18-box
+# 20  bottom-left corner of right 18-box (inside pitch)
+# 21  right penalty spot
+# 22  top-left corner of right 6-box (inside pitch)
+# 23  bottom-left corner of right 6-box (inside pitch)
+# 24  top-right corner
+# 25  top-right corner of right 18-box on touchline
+# 26  top-right corner of right 6-box on touchline
+# 27  bottom-right corner of right 6-box on touchline
+# 28  bottom-right corner of right 18-box on touchline
+# 29  bottom-right corner
+# 30  middle of left penalty arc (leftmost point)
+# 31  middle of right penalty arc (rightmost point)
+# ---------------------------------------------------------------------------
 
-#   0    not visible (off frame - top left corner)
-#   1    not visible (off frame)
-#   2    not visible (off frame)
-#   3    left touchline, mid-height area
-#   4    left touchline, upper area
-#   5    centre spot (bottom half of circle)
-#   6    not visible
-#   7    not visible
-#   8    left touchline, upper-mid
-#   9    left touchline, top area
-#  10    left touchline, just below 9
-#  11    left touchline, lower area
-#  12    left touchline, bottom area
-#  13    top touchline, left of centre
-#  14    top of centre circle (left tangent)
-#  15    bottom of centre circle (left tangent)
-#  16    not visible
-#  17    right penalty area, top
-#  18    right side, two locations (top penalty + bottom right)
-#  19    not visible
-#  20    not visible
-#  21    right touchline, mid
-#  22    top touchline, right penalty area
-#  23    not visible
-#  24    top touchline, far right
-#  25    top touchline, right of centre-right
-#  26    not visible
-#  27    not visible
-#  28    not visible
-#  29    not visible
-#  30    left penalty spot
-#  31    centre circle, right tangent (bottom half)
+_PEN_Y1  = 138   # (680 - 403) // 2
+_PEN_Y2  = 541   # 138 + 403
+_GOAL_Y1 = 248   # (680 - 183) // 2
+_GOAL_Y2 = 431   # 248 + 183
+
+# Penalty arc: radius 91px centred on penalty spot (x=110, y=340)
+# Arc midpoint = spot + radius (pointing toward centre of pitch)
+_L_ARC_X = 110 + 91   # 201
+_R_ARC_X = 940 - 91   # 849
+
+# Penalty arc top/bottom: where arc is level with box edge y=138/541
+# (x-110)^2 + (138-340)^2 = 91^2  → no real solution (arc doesn't reach)
+# So top/bottom of arc means the points where the arc is tangent to
+# lines parallel to the box edge — approximately y = 340 ± 50
+# More accurately: the arc is only drawn OUTSIDE the box, the visible
+# extreme points on y-axis from the penalty spot circle are:
+# y = 340 ± sqrt(91^2 - (165-110)^2) = 340 ± sqrt(8281-3025) = 340 ± 72
+_L_ARC_Y_OFFSET = int((91**2 - (165 - 110)**2) ** 0.5)  # 72
+_L_ARC_TOP    = 340 - _L_ARC_Y_OFFSET   # 268  — top of arc where it exits box
+_L_ARC_BOTTOM = 340 + _L_ARC_Y_OFFSET   # 412  — bottom of arc where it exits box
+_R_ARC_TOP    = 340 - _L_ARC_Y_OFFSET   # 268
+_R_ARC_BOTTOM = 340 + _L_ARC_Y_OFFSET   # 412
 
 PITCH_KEYPOINT_COORDS = np.array([
-    #  x     y      idx   location
-    [   0,   0],  #  0   top-left corner
-    [ 165,   0],  #  1   top touchline, left penalty area outer
-    [ 220,   0],  #  2   top touchline, left goal area outer
-    [   0, 408],  #  3   left touchline, bottom of left penalty area
-    [   0, 272],  #  4   left touchline, top of left penalty area
-    [ 525, 408],  #  5   centre spot (detected in bottom-circle area)
-    [   0, 680],  #  6   bottom-left corner
-    [ 165, 680],  #  7   bottom touchline, left penalty area outer
-    [   0, 340],  #  8   left touchline, halfway height
-    [   0, 204],  #  9   left touchline, upper area (top of penalty box)
-    [   0, 272],  # 10   left touchline, just inside penalty area top
-    [ 165, 476],  # 11   left penalty box, bottom-left corner
-    [   0, 476],  # 12   left touchline, bottom of penalty area
-    [ 525,   0],  # 13   top touchline, centre
-    [ 433, 340],  # 14   centre circle, left tangent (top)
-    [ 433, 340],  # 15   centre circle, left tangent (bottom)
-    [   0, 476],  # 16   left touchline, goal area bottom
-    [ 885, 204],  # 17   right penalty box, top-right corner
-    [ 885, 272],  # 18   right penalty box inner top
-    [ 885, 476],  # 19   right penalty box, bottom-right corner
-    [1050, 476],  # 20   right touchline, bottom of right penalty area
-    [1050, 340],  # 21   right touchline, mid height
-    [ 885,   0],  # 22   top touchline, right penalty area outer
-    [ 830,   0],  # 23   top touchline, right goal area outer
-    [1050,   0],  # 24   top-right corner
-    [ 700,   0],  # 25   top touchline, right of centre
-    [ 830, 680],  # 26   bottom touchline, right goal area
-    [ 885, 680],  # 27   bottom touchline, right penalty area outer
-    [1050, 680],  # 28   bottom-right corner
-    [ 525, 680],  # 29   bottom touchline, centre
-    [ 110, 340],  # 30   left penalty spot
-    [ 617, 340],  # 31   centre circle, right tangent
+    #   x      y
+    [    0,    0],   #  0  top-left corner
+    [    0,  138],   #  1  top-left of left 18-box (touchline)
+    [    0,  248],   #  2  top-left of left 6-box (touchline)
+    [    0,  431],   #  3  bottom-left of left 6-box (touchline)
+    [    0,  541],   #  4  bottom-left of left 18-box (touchline)
+    [    0,  680],   #  5  bottom-left corner
+    [   55,  248],   #  6  top-right of left 6-box (inside pitch)
+    [   55,  431],   #  7  bottom-right of left 6-box (inside pitch)
+    [  110,  340],   #  8  left penalty spot
+    [  165,  138],   #  9  top-right of left 18-box (inside pitch)
+    [  165, _L_ARC_TOP],    # 10  top of left penalty arc (where it leaves box)
+    [  165, _L_ARC_BOTTOM], # 11  bottom of left penalty arc (where it leaves box)
+    [  165,  541],   # 12  bottom-right of left 18-box (inside pitch)
+    [  525,    0],   # 13  top of halfway line (touchline)
+    [  525,  249],   # 14  halfway line — top of centre circle
+    [  525,  431],   # 15  halfway line — bottom of centre circle
+    [  525,  680],   # 16  bottom of halfway line (touchline)
+    [  885,  138],   # 17  top-left of right 18-box (inside pitch)
+    [  885, _R_ARC_TOP],    # 18  top of right penalty arc
+    [  885, _R_ARC_BOTTOM], # 19  bottom of right penalty arc
+    [  885,  541],   # 20  bottom-left of right 18-box (inside pitch)
+    [  940,  340],   # 21  right penalty spot
+    [  995,  248],   # 22  top-left of right 6-box (inside pitch)
+    [  995,  431],   # 23  bottom-left of right 6-box (inside pitch)
+    [ 1050,    0],   # 24  top-right corner
+    [ 1050,  138],   # 25  top-right of right 18-box (touchline)
+    [ 1050,  248],   # 26  top-right of right 6-box (touchline)
+    [ 1050,  431],   # 27  bottom-right of right 6-box (touchline)
+    [ 1050,  541],   # 28  bottom-right of right 18-box (touchline)
+    [ 1050,  680],   # 29  bottom-right corner
+    [_L_ARC_X, 340], # 30  left penalty arc midpoint (leftmost point)
+    [_R_ARC_X, 340], # 31  right penalty arc midpoint (rightmost point)
 ], dtype=np.float32)
 
 
-# Keypoints whose confidence is below this are ignored
+# Minimum confidence to use a keypoint
 _KPT_CONF_THRESHOLD: float = 0.5
 
 
@@ -124,7 +147,7 @@ class HomographyMapper:
         Parameters
         ----------
         image_keypoints : (N, 2) float32 — pixel coords from FieldDetector
-        confidences     : (N,)  float32 — per-keypoint confidence, optional
+        confidences     : (N,) float32  — per-keypoint confidence, optional
 
         Returns
         -------
@@ -135,7 +158,6 @@ class HomographyMapper:
 
         image_keypoints = np.asarray(image_keypoints, dtype=np.float32)
         n = len(image_keypoints)
-
         if n == 0:
             return None
 
@@ -146,23 +168,14 @@ class HomographyMapper:
         else:
             valid = ~((image_keypoints[:, 0] == 0) & (image_keypoints[:, 1] == 0))
 
-        max_idx = min(n, len(PITCH_KEYPOINT_COORDS))
+        max_idx    = min(n, len(PITCH_KEYPOINT_COORDS))
         valid_mask = valid[:max_idx]
 
         src = image_keypoints[:max_idx][valid_mask]
         dst = PITCH_KEYPOINT_COORDS[:max_idx][valid_mask]
 
-        # Remove duplicate dst coordinates — they confuse RANSAC
-        _, unique_idx = np.unique(dst, axis=0, return_index=True)
-        src = src[unique_idx]
-        dst = dst[unique_idx]
-
-        n_valid = len(src)
-        if n_valid < 4:
-            print(
-                f"[HomographyMapper] Only {n_valid} unique valid keypoints "
-                "(need >= 4). H not computed."
-            )
+        if len(src) < 4:
+            print(f"[HomographyMapper] Only {len(src)} valid keypoints — need >= 4.")
             return None
 
         H, mask = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
@@ -174,7 +187,7 @@ class HomographyMapper:
         inliers = int(mask.sum()) if mask is not None else 0
         print(
             f"[HomographyMapper] H computed — "
-            f"{inliers}/{n_valid} inliers "
+            f"{inliers}/{len(src)} inliers "
             f"({n} total keypoints from model)"
         )
 
