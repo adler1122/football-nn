@@ -24,7 +24,7 @@ def _compute_best_homography(field_detector, frames, mapper):
     SAMPLE_EVERY  = 10
     N_KPT         = 32
 
-    # Composite arrays — best detection seen so far per keypoint index
+    
     best_pts  = np.zeros((N_KPT, 2), dtype=np.float32)
     best_conf = np.zeros(N_KPT,      dtype=np.float32)
 
@@ -40,10 +40,10 @@ def _compute_best_homography(field_detector, frames, mapper):
         if result is None:
             continue
 
-        pts, conf = result   # both shape (32,) after FieldDetector filtering
+        pts, conf = result   
         scanned += 1
 
-        # Update composite: keep whichever detection has higher confidence
+        
         for idx in range(min(N_KPT, len(pts))):
             if conf[idx] > best_conf[idx]:
                 best_conf[idx] = conf[idx]
@@ -51,7 +51,7 @@ def _compute_best_homography(field_detector, frames, mapper):
 
         n_good = int((best_conf >= CONF_MIN).sum())
 
-        # Try to compute H from the current composite keypoint set
+        
         H = mapper.compute(best_pts, confidences=best_conf)
 
         if H is not None and n_good > best_n_good:
@@ -64,7 +64,7 @@ def _compute_best_homography(field_detector, frames, mapper):
             f"{n_good}/32 keypoints >= 0.5 conf"
         )
 
-        # Early exit: all 32 keypoints confidently detected
+        
         if n_good == N_KPT:
             print(f"  [scan] All 32 keypoints found — stopping early.")
             break
@@ -87,15 +87,11 @@ def run_analyzer(args, config: Config) -> None:
       5. Annotate frames and write output video.
     """
 
-    # ------------------------------------------------------------------
-    # 1. Load video
-    # ------------------------------------------------------------------
+
     video_frames = utils.read_video(config.input_video_path)
     print(f"Loaded {len(video_frames)} frames from {config.input_video_path}")
 
-    # ------------------------------------------------------------------
-    # 2. Field detection → best composite homography
-    # ------------------------------------------------------------------
+
     field_detector = FieldDetector(
         config.Analyzer.field_model_path,
         config.device,
@@ -120,17 +116,13 @@ def run_analyzer(args, config: Config) -> None:
     else:
         print("WARNING: Homography failed — bird's-eye view will be disabled.")
 
-    # ------------------------------------------------------------------
-    # 3. Track all objects across the full video
-    # ------------------------------------------------------------------
+
     tracks = tracker.track_detections(video_frames)
 
-    # ------------------------------------------------------------------
-    # 4. Team assignment
-    # ------------------------------------------------------------------
+
     assigner = Assigner()
 
-    # Bootstrap from first 30 frames
+    
     bootstrap_players = {}
     for frame_idx in range(min(30, len(video_frames))):
         for track_id, player in tracks["players"][frame_idx].items():
@@ -142,7 +134,7 @@ def run_analyzer(args, config: Config) -> None:
     def resolve_color(team: int) -> tuple:
         return config.colors.get(team, config.colors.get(0, (128, 128, 128)))
 
-    # --- Players ---
+    
     for frame_num, player_track in enumerate(tracks["players"]):
         frame = video_frames[frame_num]
         for track_id, track in player_track.items():
@@ -156,7 +148,7 @@ def run_analyzer(args, config: Config) -> None:
             track["team"]       = team
             track["team_color"] = resolve_color(team)
 
-    # --- Goalkeepers ---
+    
     for frame_num, gk_track in enumerate(tracks["goalkeepers"]):
         frame = video_frames[frame_num]
         for track_id, gk in gk_track.items():
@@ -170,9 +162,7 @@ def run_analyzer(args, config: Config) -> None:
             gk["team"]       = team
             gk["team_color"] = resolve_color(team)
 
-    # ------------------------------------------------------------------
-    # 5. Annotate and save
-    # ------------------------------------------------------------------
+
     output_frames = tracker.draw_annotations(video_frames, tracks)
     utils.save_video(output_frames, config.output_video_path)
     print(f"Saved: {config.output_video_path}")

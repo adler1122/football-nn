@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 import numpy as np
 
-# Any keypoint below this confidence is treated as undetected
+
 _CONF_MIN = 0.5
 
 
@@ -29,14 +29,13 @@ class FieldDetector:
         conf = result.keypoints.conf
         conf = conf[0].cpu().numpy() if conf is not None else np.zeros(len(pts))
 
-        # Only keep high-confidence, non-zero points
+        
         valid = (conf >= _CONF_MIN) & ~((pts[:, 0] == 0) & (pts[:, 1] == 0))
 
         if valid.sum() < 4:
             return None
 
-        # Return full 32-length arrays but zero out invalid ones
-        # (HomographyMapper uses index positions, so we must preserve indices)
+
         filtered = pts.copy()
         filtered[~valid] = 0
         return filtered
@@ -58,7 +57,7 @@ class FieldDetector:
         conf = result.keypoints.conf
         conf = conf[0].cpu().numpy() if conf is not None else np.zeros(len(pts))
 
-        # Zero out low-confidence points so HomographyMapper filters them
+        
         valid = (conf >= _CONF_MIN) & ~((pts[:, 0] == 0) & (pts[:, 1] == 0))
 
         if valid.sum() < 4:

@@ -2,11 +2,7 @@ import cv2
 import numpy as np
 
 
-# ---------------------------------------------------------------------------
-# 32-keypoint pitch coordinate map
-# ---------------------------------------------------------------------------
-# Pitch canvas: 1050 x 680 px  (1 m = 10 px, FIFA 105m x 68m)
-#
+
 # Measurements used:
 #   Penalty area depth : 16.5m = 165px
 #   Goal area depth    :  5.5m =  55px
@@ -15,9 +11,7 @@ import numpy as np
 #   Penalty spot       : 11.0m = 110px  from goal line
 #   Centre circle r    :  9.15m = 91px
 #   Penalty arc r      :  9.15m = 91px  from penalty spot
-#
-# Index → pitch location (from manual paper labelling):
-#
+
 #  0  top-left corner
 #  1  top-left corner of left 18-box on touchline
 #  2  top-left corner of left 6-box on touchline
@@ -50,25 +44,18 @@ import numpy as np
 # 29  bottom-right corner
 # 30  middle of left penalty arc (leftmost point)
 # 31  middle of right penalty arc (rightmost point)
-# ---------------------------------------------------------------------------
+
 
 _PEN_Y1  = 138   # (680 - 403) // 2
 _PEN_Y2  = 541   # 138 + 403
 _GOAL_Y1 = 248   # (680 - 183) // 2
 _GOAL_Y2 = 431   # 248 + 183
 
-# Penalty arc: radius 91px centred on penalty spot (x=110, y=340)
-# Arc midpoint = spot + radius (pointing toward centre of pitch)
+
 _L_ARC_X = 110 + 91   # 201
 _R_ARC_X = 940 - 91   # 849
 
-# Penalty arc top/bottom: where arc is level with box edge y=138/541
-# (x-110)^2 + (138-340)^2 = 91^2  → no real solution (arc doesn't reach)
-# So top/bottom of arc means the points where the arc is tangent to
-# lines parallel to the box edge — approximately y = 340 ± 50
-# More accurately: the arc is only drawn OUTSIDE the box, the visible
-# extreme points on y-axis from the penalty spot circle are:
-# y = 340 ± sqrt(91^2 - (165-110)^2) = 340 ± sqrt(8281-3025) = 340 ± 72
+
 _L_ARC_Y_OFFSET = int((91**2 - (165 - 110)**2) ** 0.5)  # 72
 _L_ARC_TOP    = 340 - _L_ARC_Y_OFFSET   # 268  — top of arc where it exits box
 _L_ARC_BOTTOM = 340 + _L_ARC_Y_OFFSET   # 412  — bottom of arc where it exits box
@@ -112,7 +99,7 @@ PITCH_KEYPOINT_COORDS = np.array([
 ], dtype=np.float32)
 
 
-# Minimum confidence to use a keypoint
+
 _KPT_CONF_THRESHOLD: float = 0.5
 
 
@@ -161,7 +148,7 @@ class HomographyMapper:
         if n == 0:
             return None
 
-        # Build validity mask
+        
         if confidences is not None:
             confidences = np.asarray(confidences, dtype=np.float32)
             valid = confidences >= _KPT_CONF_THRESHOLD
