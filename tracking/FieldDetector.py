@@ -7,7 +7,7 @@ _CONF_MIN = 0.5
 
 class FieldDetector:
     """
-    Detects pitch keypoints in a camera frame using a YOLO pose model
+    detects pitch keypoints in a camera frame using a YOLO pose model
     trained on football field lines.
     """
 
@@ -17,7 +17,7 @@ class FieldDetector:
 
     def detect_keypoints(self, frame: np.ndarray) -> "np.ndarray | None":
         """
-        Returns (N, 2) float32 array of valid keypoint pixel coords, or None.
+        returns (N, 2) float32 array of valid keypoint pixel coords, or None.
         Only keypoints with confidence >= _CONF_MIN are returned.
         """
         result = self.model.predict(frame, conf=0.25, verbose=False)[0]
@@ -44,9 +44,9 @@ class FieldDetector:
         self, frame: np.ndarray
     ) -> "tuple[np.ndarray, np.ndarray] | None":
         """
-        Returns (keypoints, confidences) preserving all 32 index positions.
-        Invalid keypoints have conf=0.0 and coords=(0,0).
-        Returns None if fewer than 4 keypoints pass the threshold.
+        returns (keypoints, confidences) preserving all 32 index positions.
+        invalid keypoints have conf=0.0 and coords=(0,0).
+        returns None if fewer than 4 keypoints pass the threshold.
         """
         result = self.model.predict(frame, conf=0.25, verbose=False)[0]
 

@@ -9,12 +9,25 @@ from .pitch import PitchDrawer
 
 
 class Tracker:
+    """
+    detects and tracks players, goalkeepers, referees/coaches, and the ball
+    across video frames using a YOLO model + ByteTrack.
+
+    tracked object structure returned by track_detections()
+    --------------------------------------------------------
+    {
+        "players":     [ { track_id: {"bounding_box": [...]} }, ... ],
+        "goalkeepers": [ { track_id: {"bounding_box": [...]} }, ... ],
+        "ball":        [ { 1:        {"bounding_box": [...]} }, ... ],
+        "others":      [ { track_id: {"bounding_box": [...]} }, ... ],
+    }
+    """
 
     def __init__(self, model_path: str, device: str) -> None:
         self.model = YOLO(model_path)
         self.model.to(device)
         self.tracker = sv.ByteTrack()
-        self.mapper = HomographyMapper()
+        self.mapper  = HomographyMapper()
         self.pitch_drawer = PitchDrawer()
 
 
@@ -35,14 +48,17 @@ class Tracker:
     def track_detections(
         self, frames: List[np.ndarray]
     ) -> Dict[str, List[Dict[int, Dict[str, Any]]]]:
-
-        raw_detections = self.__detect(frames, conf=0.3, batch_size=20)
+        """
+        Run detection + ByteTrack on every frame and return structured
+        per-frame tracking results.
+        """
+        raw_detections = self.__detect(frames, conf=0.1, batch_size=20)
 
         objects: Dict[str, list] = {
             "ball":        [],
             "players":     [],
-            "goalkeepers": [],   
-            "others":      [],   
+            "goalkeepers": [],
+            "others":      [],
         }
 
         for idx, detection in enumerate(raw_detections):
@@ -50,32 +66,28 @@ class Tracker:
 
             detection_sv = sv.Detections.from_ultralytics(detection)
 
-            
             objects["ball"].append({})
             objects["players"].append({})
             objects["goalkeepers"].append({})
             objects["others"].append({})
 
-            
-            for det in detection_sv:
-                cls_id   = det[3]
-                bbox     = det[0]
+
+            for i in range(len(detection_sv)):
+                cls_id   = int(detection_sv.class_id[i])
                 cls_name = class_names.get(cls_id, "")
 
                 if cls_name == "ball":
-                    
-                    objects["ball"][idx][1] = {
-                        "bounding_box": bbox.tolist()   
-                    }
+                    bbox = detection_sv.xyxy[i].tolist()
+                    objects["ball"][idx][1] = {"bounding_box": bbox}
                     break   
 
-           
+            
             tracked = self.tracker.update_with_detections(detection_sv)
 
-            for det in tracked:
-                cls_id   = det[3]
-                track_id = det[4]
-                bbox     = det[0].tolist()
+            for i in range(len(tracked)):
+                cls_id   = int(tracked.class_id[i])
+                track_id = int(tracked.tracker_id[i])
+                bbox     = tracked.xyxy[i].tolist()
                 cls_name = class_names.get(cls_id, "")
 
                 match cls_name:
@@ -84,7 +96,6 @@ class Tracker:
                             "bounding_box": bbox
                         }
                     case "goalkeeper":
-
                         objects["goalkeepers"][idx][track_id] = {
                             "bounding_box": bbox
                         }
@@ -95,6 +106,7 @@ class Tracker:
 
         return objects
 
+    
 
     def draw_ellipse(self, frame, bbox, color, track_id=None):
         y2       = int(bbox[3])
@@ -159,9 +171,10 @@ class Tracker:
 
         return frame
 
+    
     draw_traingle = draw_triangle
 
-
+    
 
     def draw_birds_eye_view(
         self,
@@ -173,34 +186,54 @@ class Tracker:
 
         pitch = self.pitch_drawer.create_pitch()
 
-    
+        PITCH_W = HomographyMapper.PITCH_W
+        PITCH_H = HomographyMapper.PITCH_H
+
+        
+        MARGIN = 15
+
+        def in_bounds(x, y):
+            return (
+                -MARGIN <= x <= PITCH_W + MARGIN and
+                -MARGIN <= y <= PITCH_H + MARGIN
+            )
+
+        def clamp(x, y):
+            return (
+                max(0, min(PITCH_W - 1, x)),
+                max(0, min(PITCH_H - 1, y)),
+            )
+
+        
         for track_id, player in player_dict.items():
-            foot = get_foot_position(player["bounding_box"])
-            mapped = self.mapper.transform(foot)   
+            foot   = get_foot_position(player["bounding_box"])
+            mapped = self.mapper.transform(foot)
             if mapped is None:
                 continue
 
-            x = max(0, min(HomographyMapper.PITCH_W - 1, mapped[0]))
-            y = max(0, min(HomographyMapper.PITCH_H - 1, mapped[1]))
+            if not in_bounds(mapped[0], mapped[1]):
+                continue   
 
+            x, y = clamp(mapped[0], mapped[1])
             color = player.get("team_color", (0, 0, 255))
-            cv2.circle(pitch, (x, y), 12, color,       -1)
-            cv2.circle(pitch, (x, y), 12, (255, 255, 255), 2)
+            cv2.circle(pitch, (x, y), 12, color,           -1)
+            cv2.circle(pitch, (x, y), 12, (255, 255, 255),  2)
 
-    
+        
         if goalkeeper_dict:
             for track_id, gk in goalkeeper_dict.items():
-                foot = get_foot_position(gk["bounding_box"])
+                foot   = get_foot_position(gk["bounding_box"])
                 mapped = self.mapper.transform(foot)
                 if mapped is None:
                     continue
 
-                x = max(0, min(HomographyMapper.PITCH_W - 1, mapped[0]))
-                y = max(0, min(HomographyMapper.PITCH_H - 1, mapped[1]))
+                if not in_bounds(mapped[0], mapped[1]):
+                    continue
 
+                x, y = clamp(mapped[0], mapped[1])
                 color = gk.get("team_color", (180, 0, 180))
-                cv2.circle(pitch, (x, y), 12, color,       -1)
-                cv2.circle(pitch, (x, y), 12, (255, 255, 255), 2)
+                cv2.circle(pitch, (x, y), 12, color,           -1)
+                cv2.circle(pitch, (x, y), 12, (255, 255, 255),  2)
 
         
         for _, ball in ball_dict.items():
@@ -209,19 +242,24 @@ class Tracker:
             if mapped is None:
                 continue
 
-            bx = max(0, min(HomographyMapper.PITCH_W - 1, mapped[0]))
-            by = max(0, min(HomographyMapper.PITCH_H - 1, mapped[1]))
+            if not in_bounds(mapped[0], mapped[1]):
+                continue
 
+            bx, by = clamp(mapped[0], mapped[1])
             cv2.circle(pitch, (bx, by), 8, (0, 255, 255), -1)
             cv2.circle(pitch, (bx, by), 8, (255, 255, 255), 2)
 
-      
+        
         mini = cv2.resize(pitch, (600, 380))
         h, w = mini.shape[:2]
         cv2.rectangle(mini, (0, 0), (w - 1, h - 1), (0, 0, 0), 4)
 
         ox = frame.shape[1] - w - 20
         oy = frame.shape[0] - h - 20
+
+        
+        if ox < 0 or oy < 0:
+            return frame
 
         overlay = frame.copy()
         overlay[oy: oy + h, ox: ox + w] = mini
@@ -238,37 +276,60 @@ class Tracker:
     ) -> List[np.ndarray]:
 
         output_frames = []
+        n = len(video_frames)
+
+        gk_tracks = tracks.get(
+            "goalkeepers",
+            [{} for _ in range(n)]
+        )
 
         for frame_num, frame in enumerate(video_frames):
             frame = frame.copy()
 
+            # update homography using optical flow to compensate for
+            # any camera pan / tilt / zoom since the base H was computed
+            if frame_num > 0:
+                self.mapper.update_with_optical_flow(
+                    video_frames[frame_num - 1],
+                    video_frames[frame_num],
+                )
+
             player_dict     = tracks["players"][frame_num]
             ball_dict       = tracks["ball"][frame_num]
             referee_dict    = tracks["others"][frame_num]
-            goalkeeper_dict = tracks.get("goalkeepers", [{}] * len(video_frames))[frame_num]
+            goalkeeper_dict = gk_tracks[frame_num]
 
-            # Draw players
+            # players
             for track_id, player in player_dict.items():
                 color = player.get("team_color", (0, 0, 255))
-                frame = self.draw_ellipse(frame, player["bounding_box"], color, track_id)
-
+                frame = self.draw_ellipse(
+                    frame, player["bounding_box"], color, track_id
+                )
                 if player.get("has_ball", False):
-                    frame = self.draw_triangle(frame, player["bounding_box"], (0, 0, 255))
+                    frame = self.draw_triangle(
+                        frame, player["bounding_box"], (0, 0, 255)
+                    )
 
-            # Draw goalkeepers
+            # goalkeepers
             for track_id, gk in goalkeeper_dict.items():
                 color = gk.get("team_color", (180, 0, 180))
-                frame = self.draw_ellipse(frame, gk["bounding_box"], color, track_id)
+                frame = self.draw_ellipse(
+                    frame, gk["bounding_box"], color, track_id
+                )
 
-            # Draw referees / others
+            # referees / others
             for _, referee in referee_dict.items():
-                frame = self.draw_ellipse(frame, referee["bounding_box"], (0, 255, 255))
+                frame = self.draw_ellipse(
+                    frame, referee["bounding_box"], (0, 255, 255)
+                )
 
-            # Draw ball
+            # ball
             for _, ball in ball_dict.items():
-                frame = self.draw_triangle(frame, ball["bounding_box"], (0, 255, 0))
+                frame = self.draw_triangle(
+                    frame, ball["bounding_box"], (0, 255, 0)
+                )
 
-            # Draw bird's-eye minimap
+            # bird's-eye minimap
             frame = self.draw_birds_eye_view(
                 frame,
                 player_dict,
@@ -283,23 +344,19 @@ class Tracker:
 
 
 
-def get_center_of_bbox(bbox) -> tuple[int, int]:
+def get_center_of_bbox(bbox) -> tuple:
     x1, y1, x2, y2 = bbox
     return int((x1 + x2) / 2), int((y1 + y2) / 2)
-
 
 def get_bbox_width(bbox) -> float:
     return bbox[2] - bbox[0]
 
-
-def get_foot_position(bbox) -> tuple[int, int]:
+def get_foot_position(bbox) -> tuple:
     x1, y1, x2, y2 = bbox
     return int((x1 + x2) / 2), int(y2)
-
 
 def measure_distance(p1, p2) -> float:
     return ((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2) ** 0.5
 
-
-def measure_xy_distance(p1, p2) -> tuple[float, float]:
+def measure_xy_distance(p1, p2) -> tuple:
     return p1[0] - p2[0], p1[1] - p2[1]
