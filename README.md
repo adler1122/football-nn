@@ -97,7 +97,10 @@ football_analytics/
 │
 ├── v1test/
 │   ├── __init__.py
-│   └── analyze.py           # Full pipeline orchestration
+│   ├── analyze.py           # Full pipeline orchestration
+|   ├── train_firld.py
+│   └── train_player.py
+│
 │
 └── tests/
     ├── test_geometry.py     # Bounding box helper tests
