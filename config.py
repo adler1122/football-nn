@@ -27,8 +27,8 @@ class Config:
         player_base_model: str = "yolov8s.pt"
         field_base_model: str  = "yolov8s-pose.pt"
 
-        player_data_path: str = "./data/football-players-detection"
-        field_data_path: str  = "./data/football-field-detection"
+        player_data_path: str = "./datasets/player"
+        field_data_path: str  = "./datasets/field"
 
         imgsz: int = 640
         conf: float = 0.1
