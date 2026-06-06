@@ -13,6 +13,4 @@ data
 *.mkv
 images/
 labels/
-models/
 *.cache
-tests/
